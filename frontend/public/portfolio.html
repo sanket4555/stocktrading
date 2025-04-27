@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio - StockTrader</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <div class="logo">
+                    <h1><i class="fas fa-chart-line"></i> StockTrader</h1>
+                </div>
+                <div class="user-dropdown">
+                    <button class="dropdown-btn">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="user-name">User</span>
+                        <i class="fas fa-caret-down"></i>
+                    </button>
+                    <div class="dropdown-content">
+                        <a href="profile.html"><i class="fas fa-user"></i> Profile</a>
+                        <a href="#" id="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                    </div>
+                </div>
+                <div class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="user-info">
+                    <div class="user-avatar" id="user-initials">U</div>
+                    <div>
+                        <div class="user-name" id="sidebar-user-name">User</div>
+                        <div class="user-balance">Balance: $<span id="user-balance">10,000.00</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-menu">
+                <ul>
+                    <li><a href="dashboard.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                    <li><a href="stocks.html"><i class="fas fa-chart-line"></i> Stocks</a></li>
+                    <li><a href="portfolio.html" class="active"><i class="fas fa-wallet"></i> Portfolio</a></li>
+                    <li><a href="transactions.html"><i class="fas fa-history"></i> Transactions</a></li>
+                    <li><a href="profile.html"><i class="fas fa-user"></i> Profile</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Your Portfolio</h1>
+                <div class="stock-search">
+                    <input type="text" id="stock-search-input" placeholder="Search your portfolio...">
+                    <button id="search-button"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+
+            <div class="dashboard-stats">
+                <div class="stat-card primary">
+                    <div class="stat-value">$<span id="portfolio-total-value">0.00</span></div>
+                    <div class="stat-label">Total Portfolio Value</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-value">$<span id="portfolio-profit-loss">0.00</span></div>
+                    <div class="stat-label">Total Profit/Loss</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-value"><span id="portfolio-stocks-count">0</span></div>
+                    <div class="stat-label">Stocks in Portfolio</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-value"><span id="portfolio-diversification">0%</span></div>
+                    <div class="stat-label">Diversification</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Portfolio Holdings</h2>
+                    <div class="card-actions">
+                        <button id="refresh-portfolio" class="btn btn-secondary">Refresh</button>
+                    </div>
+                </div>
+                <table class="portfolio-list">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Company</th>
+                            <th>Shares</th>
+                            <th>Avg. Buy Price</th>
+                            <th>Current Price</th>
+                            <th>Total Value</th>
+                            <th>Profit/Loss</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portfolio-table-body">
+                        <!-- Portfolio items will be populated via JavaScript -->
+                        <tr>
+                            <td colspan="8" class="text-center">Loading portfolio data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Portfolio Performance</h2>
+                </div>
+                <div class="portfolio-charts">
+                    <div class="chart-container">
+                        <h3 class="chart-title">Asset Allocation</h3>
+                        <div class="placeholder-chart" id="allocation-chart">
+                            <div class="chart-placeholder-text">
+                                <i class="fas fa-chart-pie"></i>
+                                <p>Chart will appear when you have stocks in your portfolio</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3 class="chart-title">Performance Over Time</h3>
+                        <div class="placeholder-chart" id="performance-chart">
+                            <div class="chart-placeholder-text">
+                                <i class="fas fa-chart-line"></i>
+                                <p>Chart will appear when you have transaction history</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Trade Modal -->
+    <div id="trade-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Trade <span id="trade-stock-symbol">AAPL</span></h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="stock-info">
+                    <p><strong>Company:</strong> <span id="trade-company-name">Apple Inc.</span></p>
+                    <p><strong>Current Price:</strong> $<span id="trade-stock-price">0.00</span></p>
+                    <p><strong>Shares Owned:</strong> <span id="trade-shares-owned">0</span></p>
+                </div>
+                <form id="trade-form">
+                    <input type="hidden" id="trade-stock-id">
+                    <div class="form-group">
+                        <label for="trade-type">Transaction Type</label>
+                        <select id="trade-type" name="trade-type">
+                            <option value="buy">Buy</option>
+                            <option value="sell">Sell</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="trade-quantity">Quantity</label>
+                        <input type="number" id="trade-quantity" name="quantity" min="1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="trade-total">Total Cost</label>
+                        <div id="trade-total" class="trade-total">$0.00</div>
+                    </div>
+                    <div id="trade-error" class="error-message"></div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Confirm Trade</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/portfolio.js"></script>
+</body>
+</html> 
