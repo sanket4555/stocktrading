@@ -62,15 +62,30 @@ async function loadPortfolioData(token) {
         updatePortfolioTable(portfolioData);
         
         // Update portfolio charts if there are stocks
-        if (portfolioData.stocks.length > 0) {
+        if (portfolioData.stocks && portfolioData.stocks.length > 0) {
             updatePortfolioCharts(portfolioData);
+        } else {
+            // Show placeholder for empty portfolio
+            document.getElementById('allocation-chart').innerHTML = `
+                <div class="chart-placeholder-text">
+                    <i class="fas fa-chart-pie"></i>
+                    <p>Chart will appear when you have stocks in your portfolio</p>
+                </div>
+            `;
+            
+            document.getElementById('performance-chart').innerHTML = `
+                <div class="chart-placeholder-text">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Chart will appear when you have transaction history</p>
+                </div>
+            `;
         }
         
     } catch (error) {
         console.error('Error loading portfolio:', error);
         document.getElementById('portfolio-table-body').innerHTML = `
             <tr>
-                <td colspan="8" class="text-center">Failed to load portfolio data</td>
+                <td colspan="8" class="text-center">Failed to load portfolio data: ${error.message}</td>
             </tr>
         `;
     }
@@ -114,7 +129,7 @@ function updatePortfolioTable(portfolioData) {
     const tableBody = document.getElementById('portfolio-table-body');
     if (!tableBody) return;
     
-    if (portfolioData.stocks.length === 0) {
+    if (!portfolioData.stocks || portfolioData.stocks.length === 0) {
         tableBody.innerHTML = `
             <tr>
                 <td colspan="8" class="text-center">No stocks in portfolio</td>
@@ -136,14 +151,14 @@ function updatePortfolioTable(portfolioData) {
         html += `
             <tr>
                 <td>${stock.symbol}</td>
-                <td>${stock.stock.companyName}</td>
+                <td>${stock.stock.companyName || 'Unknown'}</td>
                 <td>${stock.quantity}</td>
                 <td>$${stock.averageBuyPrice.toFixed(2)}</td>
                 <td>$${stock.stock.price.toFixed(2)}</td>
                 <td>$${stock.currentValue.toFixed(2)}</td>
                 <td class="${profitLossClass}">${profitLossPrefix}$${Math.abs(profitLoss).toFixed(2)} (${stock.profitLossPercent.toFixed(2)}%)</td>
                 <td>
-                    <button class="btn btn-primary action-btn trade-btn" data-id="${stock.stock._id}" data-symbol="${stock.symbol}" data-company="${stock.stock.companyName}" data-price="${stock.stock.price}" data-quantity="${stock.quantity}">
+                    <button class="btn btn-primary action-btn trade-btn" data-id="${stock.stock._id}" data-symbol="${stock.symbol}" data-company="${stock.stock.companyName || 'Unknown'}" data-price="${stock.stock.price}" data-quantity="${stock.quantity}">
                         Trade
                     </button>
                 </td>
@@ -404,10 +419,9 @@ function openTradeModal(stockId, symbol, company, price, sharesOwned) {
 // Execute a trade
 async function executeTrade(stockId, quantity, type, token) {
     try {
-        // Determine the API endpoint based on trade type
-        const endpoint = type === 'buy' ? '/transactions/buy' : '/transactions/sell';
+        const endpoint = type === 'buy' ? `${API_URL}/transactions/buy` : `${API_URL}/transactions/sell`;
         
-        const response = await fetch(`${API_URL}${endpoint}`, {
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -422,36 +436,72 @@ async function executeTrade(stockId, quantity, type, token) {
         const data = await response.json();
         
         if (!response.ok) {
-            throw new Error(data.message || 'Trade failed');
+            throw new Error(data.message || 'Transaction failed');
+        }
+        
+        // Update user balance in local storage
+        const userData = JSON.parse(localStorage.getItem('user'));
+        if (userData) {
+            userData.balance = data.newBalance;
+            localStorage.setItem('user', JSON.stringify(userData));
+        }
+        
+        // Update UI
+        const userBalanceElement = document.getElementById('user-balance');
+        if (userBalanceElement) {
+            userBalanceElement.textContent = data.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        
+        // Also update the sidebar balance
+        const sidebarBalanceElement = document.getElementById('user-balance');
+        if (sidebarBalanceElement) {
+            sidebarBalanceElement.textContent = data.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         
         // Close modal
         const modal = document.getElementById('trade-modal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
+        modal.style.display = 'none';
         
-        // Update user balance
-        const userData = JSON.parse(localStorage.getItem('user'));
-        userData.balance = data.newBalance;
-        localStorage.setItem('user', JSON.stringify(userData));
-        
-        // Update displayed balance
-        loadUserInfo();
-        
-        // Refresh portfolio data
+        // Reload portfolio data
         loadPortfolioData(token);
         
-        // Show success alert
-        alert(`${type.toUpperCase()} order executed successfully!`);
+        // Show success message
+        alert(`${type.charAt(0).toUpperCase() + type.slice(1)} order executed successfully!`);
         
     } catch (error) {
-        console.error('Error executing trade:', error);
-        
-        // Show error message
-        const tradeError = document.getElementById('trade-error');
-        if (tradeError) {
-            tradeError.textContent = error.message || 'Trade failed. Please try again.';
+        console.error('Trade execution error:', error);
+        const errorElement = document.getElementById('trade-error');
+        if (errorElement) {
+            errorElement.textContent = error.message;
+            errorElement.style.display = 'block';
         }
     }
-} 
+}
+
+// Function to load user info from localStorage
+function loadUserInfo() {
+    const userData = JSON.parse(localStorage.getItem('user'));
+    if (!userData) return;
+    
+    // Update username in navbar
+    const userNameElements = document.querySelectorAll('#user-name, #sidebar-user-name');
+    userNameElements.forEach(element => {
+        if (element) element.textContent = userData.name;
+    });
+    
+    // Update user balance
+    const userBalanceElement = document.getElementById('user-balance');
+    if (userBalanceElement && userData.balance !== undefined) {
+        userBalanceElement.textContent = userData.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    
+    // Update user initials
+    const userInitialsElement = document.getElementById('user-initials');
+    if (userInitialsElement && userData.name) {
+        const initials = userData.name.split(' ')
+            .map(name => name.charAt(0))
+            .join('')
+            .toUpperCase();
+        userInitialsElement.textContent = initials;
+    }
+}

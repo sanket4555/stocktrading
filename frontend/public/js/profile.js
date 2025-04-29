@@ -1,54 +1,87 @@
 // Global variables
 let user = null;
 let activityChart = null;
+const API_URL = 'http://localhost:5000/api';
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', function() {
-    // Load user data
-    loadUserInfo();
+    // Check if user is authenticated
+    const token = requireAuth();
+    if (!token) return;
+    
+    // Load user data from API
+    fetchUserProfile(token);
     
     // Setup form submission events
     setupUpdateProfileForm();
     setupChangePasswordForm();
     
-    // Initialize the activity chart
-    initActivityChart();
-    
-    // Setup dropdown toggle
-    setupDropdownToggle();
-    
     // Setup tab navigation
     setupTabNavigation();
     
-    // Load activity
-    loadActivity();
+    // Load transaction activity
+    loadTransactionActivity(token);
+    
+    // Initialize the activity chart
+    initActivityChart(token);
 });
 
-// Load user information from localStorage
-function loadUserInfo() {
-    const userData = JSON.parse(localStorage.getItem('user'));
-    
-    if (!userData) {
-        window.location.href = "login.html";
-        return;
+// Fetch user profile from the API
+async function fetchUserProfile(token) {
+    try {
+        const response = await fetch(`${API_URL}/users/profile`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to fetch user profile');
+        }
+        
+        const userData = await response.json();
+        user = userData;
+        
+        // Update UI with user data
+        updateUserInterface(userData);
+        
+        return userData;
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
+        showNotification('Error', error.message, 'error');
+    }
+}
+
+// Update the user interface with user data
+function updateUserInterface(userData) {
+    // Update user dropdown in navbar
+    const userDropdownBtn = document.querySelector('.user-dropdown-btn');
+    if (userDropdownBtn) {
+        userDropdownBtn.textContent = userData.name;
     }
     
-    // Update navbar user info
-    document.getElementById('user-name').textContent = userData.name;
-    document.getElementById('navbar-balance').textContent = `$${parseFloat(userData.balance).toFixed(2)}`;
+    // Update profile header
+    const profileName = document.querySelector('.profile-info h1');
+    const profileEmail = document.querySelector('.profile-info .email');
+    const balance = document.querySelector('.balance');
+    const avatar = document.querySelector('.avatar');
     
-    // Update user info in profile
-    document.getElementById('profile-name').textContent = userData.name;
-    document.getElementById('profile-email').textContent = userData.email;
-    document.getElementById('profile-balance').textContent = `$${parseFloat(userData.balance).toFixed(2)}`;
+    if (profileName) profileName.textContent = userData.name;
+    if (profileEmail) profileEmail.textContent = userData.email;
+    if (balance) balance.textContent = `Balance: $${parseFloat(userData.balance).toFixed(2)}`;
+    if (avatar) avatar.textContent = getUserInitials(userData.name);
     
-    // Set user avatar initials
-    const initials = getUserInitials(userData.name);
-    document.getElementById('user-avatar').textContent = initials;
+    // Update form fields
+    const nameInput = document.getElementById('name');
+    const emailInput = document.getElementById('email');
     
-    // Pre-fill form fields
-    document.getElementById('input-name').value = userData.name;
-    document.getElementById('input-email').value = userData.email;
+    if (nameInput) nameInput.value = userData.name;
+    if (emailInput) emailInput.value = userData.email;
+    
+    console.log('User interface updated with profile data:', userData);
 }
 
 // Get user initials from name
@@ -73,35 +106,71 @@ function populateProfileInfo(user) {
 
 // Setup the update profile form
 function setupUpdateProfileForm() {
-    const updateForm = document.getElementById('update-profile-form');
-    updateForm.addEventListener('submit', function(e) {
+    const personalInfoForm = document.getElementById('personal-info-form');
+    if (!personalInfoForm) return;
+    
+    personalInfoForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         
-        const name = document.getElementById('update-name').value.trim();
-        const email = document.getElementById('update-email').value.trim();
+        const name = document.getElementById('name').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const phone = document.getElementById('phone')?.value.trim() || '';
         
         if (!name || !email) {
-            showNotification('Please fill in all fields', 'error');
+            showNotification('Error', 'Please fill in all required fields', 'error');
             return;
         }
         
-        // In a real application, this would make an API call
-        // For now, we'll just update localStorage
-        user.name = name;
-        user.email = email;
-        
-        localStorage.setItem('user', JSON.stringify(user));
-        
-        // Update UI
-        loadUserInfo();
-        showNotification('Profile updated successfully!', 'success');
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('You must be logged in to update your profile');
+            }
+            
+            // Since we don't have a dedicated endpoint to update user profile,
+            // we'll update the local storage for now
+            // In a real application, this would make an API call like:
+            /*
+            const response = await fetch(`${API_URL}/users/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, email, phone })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to update profile');
+            }
+            
+            const updatedUser = await response.json();
+            */
+            
+            // Update local storage for now
+            const userData = JSON.parse(localStorage.getItem('user'));
+            userData.name = name;
+            userData.email = email;
+            localStorage.setItem('user', JSON.stringify(userData));
+            
+            // Update UI
+            updateUserInterface(userData);
+            
+            showNotification('Success', 'Profile updated successfully', 'success');
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            showNotification('Error', error.message, 'error');
+        }
     });
 }
 
 // Setup the change password form
 function setupChangePasswordForm() {
-    const passwordForm = document.getElementById('change-password-form');
-    passwordForm.addEventListener('submit', function(e) {
+    const passwordForm = document.getElementById('password-form');
+    if (!passwordForm) return;
+    
+    passwordForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const currentPassword = document.getElementById('current-password').value;
@@ -109,87 +178,198 @@ function setupChangePasswordForm() {
         const confirmPassword = document.getElementById('confirm-password').value;
         
         if (!currentPassword || !newPassword || !confirmPassword) {
-            showNotification('Please fill in all password fields', 'error');
+            showNotification('Error', 'Please fill in all password fields', 'error');
             return;
         }
         
         if (newPassword !== confirmPassword) {
-            showNotification('New passwords do not match', 'error');
+            showNotification('Error', 'New passwords do not match', 'error');
             return;
         }
         
-        // In a real application, this would make an API call
-        // For now, we'll just show a success message
-        showNotification('Password changed successfully!', 'success');
+        if (newPassword.length < 6) {
+            showNotification('Error', 'Password must be at least 6 characters long', 'error');
+            return;
+        }
         
-        // Reset form
-        passwordForm.reset();
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('You must be logged in to change your password');
+            }
+            
+            // Since we don't have a dedicated endpoint to change password,
+            // we'll just show a success message for now
+            // In a real application, this would make an API call like:
+            /*
+            const response = await fetch(`${API_URL}/users/password`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    currentPassword,
+                    newPassword 
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to change password');
+            }
+            */
+            
+            showNotification('Success', 'Password changed successfully', 'success');
+            
+            // Reset form
+            passwordForm.reset();
+        } catch (error) {
+            console.error('Error changing password:', error);
+            showNotification('Error', error.message, 'error');
+        }
     });
 }
 
-// Initialize the activity chart
-function initActivityChart() {
-    const ctx = document.getElementById('activity-chart').getContext('2d');
-    
-    // Sample data - in a real app, this would come from an API
+// Initialize the activity chart based on transaction data
+async function initActivityChart(token) {
+    try {
+        // Get transaction data from API
+        const transactions = await fetchTransactions(token);
+        if (!transactions || transactions.length === 0) {
+            console.log('No transaction data available for chart');
+            return;
+        }
+        
+        const canvas = document.getElementById('activity-chart');
+        if (!canvas) {
+            console.error('Activity chart canvas not found');
+            return;
+        }
+        
+        console.log('Initializing activity chart with transactions:', transactions.length);
+        
+        // Process transaction data for chart
+        const chartData = processTransactionsForChart(transactions);
+        
+        // Create chart
+        activityChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: [
+                    {
+                        label: 'Buy Transactions',
+                        data: chartData.buyData,
+                        backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                        borderColor: 'rgba(46, 204, 113, 1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgba(46, 204, 113, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
+                    },
+                    {
+                        label: 'Sell Transactions',
+                        data: chartData.sellData,
+                        backgroundColor: 'rgba(231, 76, 60, 0.2)',
+                        borderColor: 'rgba(231, 76, 60, 1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgba(231, 76, 60, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Transactions'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        bodyFont: {
+                            size: 13
+                        },
+                        titleFont: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+        
+        console.log('Activity chart initialized successfully');
+        
+    } catch (error) {
+        console.error('Error initializing activity chart:', error);
+    }
+}
+
+// Process transactions data for the chart
+function processTransactionsForChart(transactions) {
+    // Get the last 7 days
     const dates = [];
-    const loginCounts = [];
+    const buyData = [];
+    const sellData = [];
     
-    // Generate sample data for the last 7 days
+    // Create date labels for the last 7 days
     for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        dates.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        loginCounts.push(Math.floor(Math.random() * 3) + 1); // Random login count between 1-3
+        date.setHours(0, 0, 0, 0);
+        dates.push(date);
     }
     
-    activityChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: dates,
-            datasets: [{
-                label: 'Login Activity',
-                data: loginCounts,
-                backgroundColor: 'rgba(52, 152, 219, 0.2)',
-                borderColor: 'rgba(52, 152, 219, 1)',
-                borderWidth: 2,
-                tension: 0.4,
-                pointBackgroundColor: 'rgba(52, 152, 219, 1)',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2,
-                pointRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1,
-                        precision: 0
-                    }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                    bodyFont: {
-                        size: 13
-                    },
-                    titleFont: {
-                        size: 14,
-                        weight: 'bold'
-                    }
-                },
-                legend: {
-                    display: true,
-                    position: 'top'
-                }
-            }
-        }
+    // Format dates for display
+    const labels = dates.map(date => 
+        date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    );
+    
+    // Count transactions for each day
+    dates.forEach(date => {
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const buyCount = transactions.filter(t => 
+            t.type === 'buy' && 
+            new Date(t.date) >= date && 
+            new Date(t.date) < nextDay
+        ).length;
+        
+        const sellCount = transactions.filter(t => 
+            t.type === 'sell' && 
+            new Date(t.date) >= date && 
+            new Date(t.date) < nextDay
+        ).length;
+        
+        buyData.push(buyCount);
+        sellData.push(sellCount);
     });
+    
+    return { labels, buyData, sellData };
 }
 
 // Show notification to the user
@@ -247,6 +427,11 @@ function setupTabNavigation() {
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabPanes = document.querySelectorAll('.tab-pane');
     
+    if (!tabButtons.length || !tabPanes.length) {
+        console.error('Tab navigation elements not found');
+        return;
+    }
+    
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             // Remove active class from all buttons and panes
@@ -256,61 +441,192 @@ function setupTabNavigation() {
             // Add active class to clicked button and corresponding pane
             button.classList.add('active');
             const tabId = button.getAttribute('data-tab');
-            document.getElementById(tabId).classList.add('active');
+            const targetPane = document.getElementById(tabId);
+            
+            if (targetPane) {
+                targetPane.classList.add('active');
+            } else {
+                console.error(`Tab pane with id ${tabId} not found`);
+            }
         });
     });
+    
+    console.log('Tab navigation setup complete');
 }
 
-// Load user activity
-function loadActivity() {
-    const activityList = document.getElementById('activity-list');
-    if (!activityList) return;
-    
-    // Sample activity data
-    const activities = [
-        { 
-            type: 'purchase', 
-            icon: 'fa-shopping-cart', 
-            description: 'Purchased 5 shares of AAPL', 
-            time: '2 hours ago' 
-        },
-        { 
-            type: 'sale', 
-            icon: 'fa-money-bill-wave', 
-            description: 'Sold 10 shares of MSFT', 
-            time: '1 day ago' 
-        },
-        { 
-            type: 'deposit', 
-            icon: 'fa-wallet', 
-            description: 'Deposited $500.00 to account', 
-            time: '3 days ago' 
-        },
-        { 
-            type: 'login', 
-            icon: 'fa-sign-in-alt', 
-            description: 'Logged in from new device', 
-            time: '1 week ago' 
+// Fetch transactions from the API
+async function fetchTransactions(token) {
+    try {
+        const response = await fetch(`${API_URL}/transactions`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to fetch transactions');
         }
-    ];
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error fetching transactions:', error);
+        return [];
+    }
+}
+
+// Load transaction activity
+async function loadTransactionActivity(token) {
+    try {
+        const transactions = await fetchTransactions(token);
+        if (!transactions || transactions.length === 0) {
+            displayNoActivityMessage();
+            return;
+        }
+        
+        console.log('Transactions loaded successfully:', transactions.length);
+        
+        // Display recent transactions in the activity tab
+        displayRecentTransactions(transactions);
+        
+        // Update activity stats
+        updateActivityStats(transactions);
+    } catch (error) {
+        console.error('Error loading transaction activity:', error);
+        displayNoActivityMessage();
+    }
+}
+
+// Display recent transactions in the activity tab
+function displayRecentTransactions(transactions) {
+    const activityList = document.querySelector('.activity-list');
+    if (!activityList) {
+        console.error('Activity list container not found');
+        return;
+    }
     
-    let activityHTML = '<h3>Recent Activity</h3>';
+    // Clear existing content
+    activityList.innerHTML = '';
     
-    activities.forEach(activity => {
-        activityHTML += `
-            <div class="activity-item">
-                <div class="activity-icon">
-                    <i class="fas ${activity.icon}"></i>
+    // Sort transactions by date (newest first)
+    const sortedTransactions = [...transactions].sort((a, b) => 
+        new Date(b.date) - new Date(a.date)
+    );
+    
+    // Display the 10 most recent transactions
+    const recentTransactions = sortedTransactions.slice(0, 10);
+    
+    if (recentTransactions.length === 0) {
+        displayNoActivityMessage();
+        return;
+    }
+    
+    console.log('Displaying recent transactions:', recentTransactions.length);
+    
+    recentTransactions.forEach(transaction => {
+        const activityItem = document.createElement('div');
+        activityItem.className = 'activity-item';
+        
+        const date = new Date(transaction.date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        const typeClass = transaction.type === 'buy' ? 'buy' : 'sell';
+        const typeIcon = transaction.type === 'buy' ? 'shopping-cart' : 'exchange-alt';
+        
+        activityItem.innerHTML = `
+            <div class="activity-date">${date}</div>
+            <div class="activity-icon ${typeClass}">
+                <i class="fas fa-${typeIcon}"></i>
+            </div>
+            <div class="activity-details">
+                <div class="activity-title">
+                    ${transaction.type === 'buy' ? 'Bought' : 'Sold'} ${transaction.quantity} shares of ${transaction.symbol}
                 </div>
-                <div class="activity-details">
-                    <p>${activity.description}</p>
-                    <span class="activity-time">${activity.time}</span>
+                <div class="activity-subtitle">
+                    Price: $${parseFloat(transaction.price).toFixed(2)} | Total: $${parseFloat(transaction.total).toFixed(2)}
                 </div>
             </div>
         `;
+        
+        activityList.appendChild(activityItem);
     });
+}
+
+// Display no activity message
+function displayNoActivityMessage() {
+    const activityList = document.querySelector('.activity-list');
+    if (!activityList) return;
     
-    activityList.innerHTML = activityHTML;
+    activityList.innerHTML = `
+        <div class="no-activity">
+            <i class="fas fa-info-circle"></i>
+            <p>No recent activity found.</p>
+        </div>
+    `;
+}
+
+// Update activity stats
+function updateActivityStats(transactions) {
+    if (!transactions || transactions.length === 0) {
+        console.log('No transactions available for stats');
+        return;
+    }
+    
+    // Calculate total trades
+    const totalTrades = transactions.length;
+    
+    // Calculate profit/loss
+    const profitLoss = calculateProfitLoss(transactions);
+    
+    // Calculate account age in days
+    const firstTransaction = [...transactions].sort((a, b) => 
+        new Date(a.date) - new Date(b.date)
+    )[0];
+    
+    const accountAgeInDays = Math.ceil(
+        (new Date() - new Date(firstTransaction.date)) / (1000 * 60 * 60 * 24)
+    );
+    
+    console.log('Activity stats calculated:', { totalTrades, profitLoss, accountAgeInDays });
+    
+    // Update the UI
+    const statValues = document.querySelectorAll('.stat-value');
+    if (!statValues || statValues.length < 3) {
+        console.error('Stat value elements not found');
+        return;
+    }
+    
+    // Total trades
+    statValues[0].textContent = totalTrades;
+    
+    // Profit/Loss
+    const profitLossElement = statValues[1];
+    profitLossElement.textContent = `${profitLoss >= 0 ? '+' : ''}$${Math.abs(profitLoss).toFixed(2)}`;
+    profitLossElement.className = profitLoss >= 0 ? 'stat-value profit' : 'stat-value loss';
+    
+    // Account age
+    statValues[2].textContent = `${accountAgeInDays} days`;
+}
+
+// Calculate profit/loss from transactions
+function calculateProfitLoss(transactions) {
+    if (!transactions || transactions.length === 0) return 0;
+    
+    return transactions.reduce((total, transaction) => {
+        if (transaction.type === 'buy') {
+            return total - parseFloat(transaction.total);
+        } else { // sell
+            return total + parseFloat(transaction.total);
+        }
+    }, 0);
 }
 
 // Handle logout
